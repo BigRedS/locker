@@ -12,7 +12,7 @@ At simplest, add a lockfile (`/tmp/website` here) to a command:
 
 More complicatedly, send a mail on failure:
 
-    locker -n website -e --on-failure '~/bin/mail_failure website' php5 ~/public_html/cron.php
+    locker -n website --on-failure '~/bin/mail_failure website' php5 ~/public_html/cron.php
 
 Redirect stderr/stdout:
 
