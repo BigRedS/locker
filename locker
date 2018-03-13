@@ -42,8 +42,8 @@ GetOptions(
 
 	'lockfiledir' => \$lockdir,
 
-	'after-success' => \$on_success_cmd,
-	'after-failure' => \$on_failure_cmd,
+	'on-success=s' => \$on_success_cmd,
+	'on-failure=s' => \$on_failure_cmd,
 
 	'log=s' => \$logfile,
 	'stdout=s' => \$stdout_file,
@@ -55,7 +55,7 @@ GetOptions(
 
 	'no-stderr' => \$no_stderr,
 	'no-stdout' => \$no_stdout,
-) or abort ("Error parsing command-line options");
+) or abort ("Error parsing command-line options", 1);
 
 short_usage() if $short_help;
 usage() if $help;
