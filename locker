@@ -293,7 +293,7 @@ sub usage{
 
 locker: A handy command wrapper
 
-For when you don't want to have to write your own file-locking and logging.
+For when you don't want to have to write your own lockfile and log handling.
 
 Usage:
 

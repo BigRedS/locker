@@ -18,7 +18,7 @@ Redirect stderr/stdout:
 
     locker -n website -e 'php5 ~/public_html/cron.php' --stdout ~/logs/webcron.log --stderr ~/logs/webcron.err
 
-See `locker --help` (or ./help.txt) for a more thorough explanation of all options, and `locker -h` 
+See `locker --help` (or `./help.txt`) for a more thorough explanation of all options, and `locker -h` 
 for a quick listing.
 
 # Command Execution
@@ -32,7 +32,7 @@ surprises when simply adding this to a cronjob execution.
 
 Output is treated in three streams; `locker`'s own output, the stdout of the passed command and the 
 stderr of the command. No distinction is made between the command given with `--execute` and any given
-with `--on-failure` or `--on-error`.
+with `--on-failure` or `--on-success`.
 
 For each, the command is executed and then its stdout is read and processed, and then its stderr. 
 
