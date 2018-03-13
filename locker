@@ -1,0 +1,384 @@
+#! /usr/bin/perl
+
+use strict;
+use Getopt::Long;
+use IPC::Open3;
+
+my $lockdir = '/tmp';
+my $lockfilename = undef;
+
+my $command = undef;
+
+my $logfile = undef;
+my $append_log = undef;
+
+my $stdout_file = undef;
+my $stderr_file = undef;
+
+my $append_stderr = undef;
+my $append_stdout = undef;
+
+my $no_stdout = undef;
+my $no_stderr = undef;
+
+my $on_failure_cmd = undef;
+my $on_success_cmd = undef;
+
+my $log_fh = \*STDOUT;
+my $stdout_fh = \*STDOUT;
+my $stderr_fh = \*STDERR;
+
+my $help = undef;
+my $short_help = undef;
+
+$short_help++ if @ARGV == 0;
+
+GetOptions(
+	'h' => \$short_help,
+	'help' => \$help,
+
+	'execute|e=s' => \$command,
+	'name|n=s' => \$lockfilename,
+
+	'lockfiledir' => \$lockdir,
+
+	'after-success' => \$on_success_cmd,
+	'after-failure' => \$on_failure_cmd,
+
+	'log=s' => \$logfile,
+	'stdout=s' => \$stdout_file,
+	'stderr=s' => \$stderr_file,
+
+	'append-stderr' => \$append_stderr,
+	'append-stdout' => \$append_stdout,
+
+	'no-stderr' => \$no_stderr,
+	'no-stdout' => \$no_stdout,
+) or abort ("Error parsing command-line options");
+
+short_usage() if $short_help;
+usage() if $help;
+
+print $stderr_fh "No lockfile name supplied! Use --name [name] to specify it, or --help for help\n" and exit 255 unless $lockfilename;
+print $stderr_fh "No command supplied! Use --execute [command] to specify it, or --help for help\n" and exit 255 unless $command;
+
+# First, sort out where any output needs to go:
+
+debug("Logfile: $logfile, stdout_file: $stdout_file, stderr_file: $stderr_file");
+if($logfile){
+	my $mode = $append_log ? '>>' : '>';
+	open($log_fh, $mode, $logfile) or abort ("Failed to open logfile '$logfile' for writing : $!");
+	debug("Opened logfile '$logfile' - mode '$mode'");
+}else{
+	$log_fh = \*STDOUT;
+}
+
+if($stdout_file){
+	my $mode = $append_stderr ? '>>' : '>';
+	open($stdout_fh, $mode, $stdout_file) or abort ("Failed to open '$stdout_file' to write STDOUT to :$!");
+	debug("Opened stdout file '$stdout_file' - mode '$mode'");
+}elsif($logfile){
+	$stdout_fh = $log_fh;
+	debug("Directed stdout filehandle at log filehandle");
+}else{
+	$stdout_fh = \*STDOUT;
+	debug("Directed stdout filehandle at STDOUT");
+}
+
+if($stderr_file){
+	my $mode = $append_stderr ? '>>' : '>';
+	open($stderr_fh, $mode, $stderr_file) or abort ("Failed to open '$stderr_file' to write STDERR to :$!");
+	debug("Opened stderr file '$stderr_file' - mode '$mode'");
+}elsif($logfile){
+	$stderr_fh = $log_fh;
+	debug("Directed stderr filehandle at log filehandle");
+}else{
+	$stderr_fh = \*STDERR;
+	debug("Directed stderr filehandle at STDERR");
+}
+
+
+
+# Now we can write useful errors when things go wrong, assemble a lockfile path and get a lock:
+my $lockfile_path;
+if($lockfilename =~ m#^[/\.]#){
+	$lockfile_path = $lockfilename;
+}else{
+	$lockfile_path = $lockdir.'/'.$lockfilename;
+	$lockfile_path =~ s#//#/#g;
+}
+
+info("Lockfile path: $lockfile_path");
+lock_file($lockfile_path);
+
+# Now that it's locked, make a Ctrl-C unlock the file:
+$SIG{INT} = sub{ unlock_file($lockfile_path); abort ("Ctrl-C caught"); };
+
+# And now we can run the command!
+my $retval = run_command($command);
+
+if($retval eq 0 and $on_success_cmd){
+	info("Running post-success command");
+	run_command($on_success_cmd);
+}elsif($retval != 0 and $on_failure_cmd){
+	info("Running post-failure command");
+	run_command($on_failure_cmd);
+}
+
+unlock_file($lockfile_path);
+exit $retval;
+
+# # #
+# #
+# 
+
+# Command-running
+
+sub run_command{
+	my @command = shift;
+
+	info("Command: $command");
+
+	my $pid;
+	eval{ open3(\*WRITER, \*READER, \*ERROR, join(' ', @command)) };
+	if($@){
+		abort("Command execution failed: $@");
+	}
+
+	unless($no_stdout){
+		while(my $output = <READER>){
+			stdout($output);
+		}
+	}
+
+	unless($no_stderr){
+		while(my $err = <ERROR>){
+			stderr($err);
+		}
+	}
+
+	waitpid($pid, 0);
+
+	my $retval = $? >> 8;
+	info("Exited: $retval");
+	return($retval);
+}
+
+
+sub stdout{
+	my $message = shift;
+	chomp($message);
+	$message='STDOUT: '.$message unless $stdout_file;
+	print $stdout_fh $message."\n";
+}
+sub stderr{
+	my $message = shift;
+	chomp($message);
+	$message='STDERR: '.$message unless $stderr_file;
+	print $stderr_fh $message."\n";
+}
+
+
+# Lockfile stuff
+
+sub lock_file {
+	my $lockfile = shift;
+	if(-f $lockfile){
+		my $pid_from_file = get_pid_from_lockfile($lockfile);
+		abort("Lock file '$lockfile' already exists for process with pid $pid_from_file!", 1);
+	}
+
+	my $old_umask = umask(222);
+	open(my $fh, '>', $lockfile) or abort("Failed to open lockfile '$lockfile' for writing : $!", 1);
+	print $fh $$;
+	close($fh);
+	umask($old_umask);
+
+	my $pid_from_file = get_pid_from_lockfile($lockfile);
+	if($pid_from_file ==  $$){
+		info("Wrote lockfile '$lockfile' with pid '$pid_from_file'");
+		return 1;
+	};
+	abort("Failed to lock '$lockfile'! Locked by process with PID '$pid_from_file'", 1);
+
+}
+
+sub unlock_file {
+	my $lockfile = shift;
+	abort("Lockfile '$lockfile' doesn't exist; unlocking failed!", 1)unless -f $lockfile;
+	my $pid_from_file = get_pid_from_lockfile($lockfile);
+	if($pid_from_file eq $$){
+		unlink($lockfile) or abort("Failed to delete file '$lockfile' : $!", 1);
+		info("Unlocked file '$lockfile' with pid '$$'");
+		return 1;
+	}
+	abort("Unlocking failed! Lockfile '$lockfile' contains pid '$pid_from_file' but this is '$$'!", 1);
+}
+
+sub get_pid_from_lockfile{
+	my $lockfile = shift;
+	return unless -f $lockfile;
+	open(my $fh, "<", $lockfile) or abort("Failed to open lockfile '$lockfile' for reading :$!");
+	my @lines;
+	while(my $line = readline($fh)){
+		chomp($line);
+		push(@lines, $line);
+	
+	}
+
+	return $lines[0] if @lines == 1;
+
+	abort("Lockfile '$lockfile' has too many lines (".scalar(@lines).")! Locking attempt intercepted?");
+}
+
+# Really generic:
+
+sub abort{
+	my $message = shift;
+	my $no_unlock = shift;
+	chomp($message);
+	$message = 'ERROR:  '.$message."\n";
+	print $log_fh $message;
+	print STDERR  $message if $ENV{DEBUG} > 0 and $logfile;
+	print $log_fh "ERROR:   Aborting\n";
+	print STDERR  "ERROR:   Aborting\n" if $ENV{DEBUG} > 0 and $logfile;
+	unlock_file($lockfile_path) unless $no_unlock;
+	exit 1;
+}
+
+sub info{
+	my $message = shift;
+	chomp($message);
+	$message = 'INFO:   '.$message."\n";
+	print $log_fh $message;
+	print $message if $ENV{DEBUG} > 0 and $logfile;
+}
+
+sub debug{
+	return unless $ENV{DEBUG} > 0;
+	my $message = shift;
+	chomp($message);
+	print STDERR 'DEBUG:  '.$message."\n";
+}
+
+sub short_usage{
+	print <<EOF;
+
+Usage: 
+  $0 --execute [command] --name [name]
+
+Options:
+
+  --help   Longer help output
+
+  Output:
+    --log [path], --stderr [path], --stdout [path]
+    --append-log, --append-stderr, --append-stdout
+    --no-stderr, --no-stdout
+
+  Command:
+    --on-success [command]
+    --on-failure [command]
+
+  Locking:
+    --lockdir [path] (default: $lockdir)
+
+
+EOF
+	exit 255;
+}
+
+sub usage{
+	print <<EOF;
+
+locker: A handy command wrapper
+
+For when you don't want to have to write your own file-locking and logging.
+
+Usage:
+
+    locker [options] --execute [command] --name [name]
+
+OPTIONS:
+
+  --execute [command]
+
+    The command to execute
+
+  --name [name]
+
+    A 'name' for this command (probably a cronjob). This is the name of the file
+    create in --lockdir (see below, default: $lockdir).
+
+    If this begins with a '.' or a '/' then that path is used, and --lockdir is
+    ignored.
+
+  --help 
+
+    See this (long) help
+
+  --h
+  
+    Shorter help output
+
+  OUTPUT:
+
+    By default, all output is printed to stderr and stdout. Lines of locker's 
+    own output is prefixed with one of 'INFO', 'ERROR' or 'DEBUG', and lines the
+    given command printed to standard out with 'STDOUT, and to standard error 
+    with 'STDERR'
+
+    --log [path]
+
+    will cause this all to be written to the new file at [path] instead. 
+
+    --stdout [path], --stderr [path]
+
+    will do same for the stdout and stderr of the executed command, creating new
+    files.
+
+    --append-log, --append-stdout, --append-stderr
+
+    will cause these files to be appended-to rather than overwritten. Note that
+    the command is executed, then its stdout is printed, and then its stderr.
+
+    Alternatively, the stderr/stdout of commands can be dumped with one or both
+    of:
+
+    --no-stderr, --no-stdout
+
+    These switches affect both the 'main' command (passed to -e/--execute) and 
+    any run as --on-success or --on-failure.
+
+
+  LOCKING:
+  
+    --lockdir [path] 
+
+    Specifies a path under which to create the file given with --name. When 
+    --name begins with a '.' or a '/', --lockdir is ignored.
+
+
+  COMMAND EXECUTION
+
+    The command given to '--execute' is exeucted and locker exits with the same
+    status as this command.
+    
+    Post-run commands can be executed with:
+
+    --after-success [command]
+    --after-failure [command]
+
+    The output of these is treated exactly as if it were the output of the 
+    main command, with regards to output (re)direction. The exit status of
+    these is logged but doesn't affect the exiting of locker.
+
+ EXAMPLES:
+
+   locker -n websitecron -e 'php5 ~/public_html/cron.php' -f ./bin/cron-failure.sh --log ./logs/website-cron.log
+
+   locker -n dbdump -e ~/bin/dbdump.sh -s ~/bin/db_success.sh -f ~/bin/db_failure.sh --no-stderr --no-stdout >/dev/null
+
+EOF
+	exit 255;
+}

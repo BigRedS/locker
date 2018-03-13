@@ -1,0 +1,89 @@
+
+locker: A handy command wrapper
+
+For when you don't want to have to write your own file-locking and logging.
+
+Usage:
+
+    locker [options] --execute [command] --name [name]
+
+OPTIONS:
+
+  --execute [command]
+
+    The command to execute
+
+  --name [name]
+
+    A 'name' for this command (probably a cronjob). This is the name of the file
+    create in --lockdir (see below, default: /tmp).
+
+    If this begins with a '.' or a '/' then that path is used, and --lockdir is
+    ignored.
+
+  --help 
+
+    See this (long) help
+
+  --h
+  
+    Shorter help output
+
+  OUTPUT:
+
+    By default, all output is printed to stderr and stdout. Lines of locker's 
+    own output is prefixed with one of 'INFO', 'ERROR' or 'DEBUG', and lines the
+    given command printed to standard out with 'STDOUT, and to standard error 
+    with 'STDERR'
+
+    --log [path]
+
+    will cause this all to be written to the new file at [path] instead. 
+
+    --stdout [path], --stderr [path]
+
+    will do same for the stdout and stderr of the executed command, creating new
+    files.
+
+    --append-log, --append-stdout, --append-stderr
+
+    will cause these files to be appended-to rather than overwritten. Note that
+    the command is executed, then its stdout is printed, and then its stderr.
+
+    Alternatively, the stderr/stdout of commands can be dumped with one or both
+    of:
+
+    --no-stderr, --no-stdout
+
+    These switches affect both the 'main' command (passed to -e/--execute) and 
+    any run as --on-success or --on-failure.
+
+
+  LOCKING:
+  
+    --lockdir [path] 
+
+    Specifies a path under which to create the file given with --name. When 
+    --name begins with a '.' or a '/', --lockdir is ignored.
+
+
+  COMMAND EXECUTION
+
+    The command given to '--execute' is exeucted and locker exits with the same
+    status as this command.
+    
+    Post-run commands can be executed with:
+
+    --after-success [command]
+    --after-failure [command]
+
+    The output of these is treated exactly as if it were the output of the 
+    main command, with regards to output (re)direction. The exit status of
+    these is logged but doesn't affect the exiting of locker.
+
+ EXAMPLES:
+
+   locker -n websitecron -e 'php5 ~/public_html/cron.php' -f ./bin/cron-failure.sh --log ./logs/website-cron.log
+
+   locker -n dbdump -e ~/bin/dbdump.sh -s ~/bin/db_success.sh -f ~/bin/db_failure.sh --no-stderr --no-stdout >/dev/null
+
