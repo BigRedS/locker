@@ -2,7 +2,7 @@
 
 Easily add lock-file behaviour (so as to prevent concurrent running) to commands (particularly cronjobs).
 
-    locker -n [name] -e [command]
+    locker -n [name] [command]
 
 # Usage
 
