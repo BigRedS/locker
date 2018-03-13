@@ -8,11 +8,11 @@ Easily add lock-file behaviour (so as to prevent concurrent running) to commands
 
 At simplest, add a lockfile (`/tmp/website` here) to a command:
 
-    locker -n website -e 'php5 ~/public_html/cron.php' 
+    locker -n website php5 ~/public_html/cron.php
 
 More complicatedly, send a mail on failure:
 
-    locker -n website -e 'php5 ~/public_html/cron.php' --on-failure '~/bin/mail_failure website'
+    locker -n website -e --on-failure '~/bin/mail_failure website' php5 ~/public_html/cron.php
 
 Redirect stderr/stdout:
 
@@ -27,6 +27,11 @@ The command is executed using Perl's `IPC::Open3`; this means it is executed in 
 no sanitising or artificial re-creation of an enviornment is carried out. This ought to cause no 
 surprises when simply adding this to a cronjob execution.
 
+The command may be passed as a string to `-e` or `--execute`. If neither of these switches is used, 
+any not-otherwise-processed arguments are joined together to create the command. A `--` may be used
+to signal the end of locker's arguments: 
+
+    locker -n dulog --stdout /home/du.log -- du -sh /home/*
 
 # Output
 

@@ -59,6 +59,11 @@ GetOptions(
 short_usage() if $short_help;
 usage() if $help;
 
+unless($command){
+	$command = join(' ', @ARGV);
+	info("Command deduced (no --execute switch): $command");
+}
+
 print $stderr_fh "No lockfile name supplied! Use --name [name] to specify it, or --help for help\n" and exit 255 unless $lockfilename;
 print $stderr_fh "No command supplied! Use --execute [command] to specify it, or --help for help\n" and exit 255 unless $command;
 
@@ -135,12 +140,12 @@ exit $retval;
 # Command-running
 
 sub run_command{
-	my @command = shift;
+	my $command = shift;
 
 	info("Command: $command");
 
 	my $pid;
-	eval{ open3(\*WRITER, \*READER, \*ERROR, join(' ', @command)) };
+	eval{ open3(\*WRITER, \*READER, \*ERROR, $command) };
 	if($@){
 		abort("Command execution failed: $@");
 	}
@@ -195,7 +200,7 @@ sub lock_file {
 	umask($old_umask);
 
 	my $pid_from_file = get_pid_from_lockfile($lockfile);
-	if($pid_from_file ==  $$){
+	if($pid_from_file == $$){
 		info("Wrote lockfile '$lockfile' with pid '$pid_from_file'");
 		return 1;
 	};
@@ -265,7 +270,7 @@ sub short_usage{
 	print <<EOF;
 
 Usage: 
-  $0 --execute [command] --name [name]
+  locker -n [name] [command]
 
 Options:
 
@@ -297,13 +302,14 @@ For when you don't want to have to write your own lockfile and log handling.
 
 Usage:
 
-    locker [options] --execute [command] --name [name]
+    locker [options] --name [name] [command]
 
 OPTIONS:
 
   --execute [command]
 
-    The command to execute
+    The command to execute. If -e/--execute is not passed, any not-otherwise-
+    processed arguments are taken to be the command.
 
   --name [name]
 
@@ -347,8 +353,8 @@ OPTIONS:
 
     --no-stderr, --no-stdout
 
-    These switches affect both the 'main' command (passed to -e/--execute) and 
-    any run as --on-success or --on-failure.
+    These switches affect both the 'main' command (as passed to -e/--execute) 
+    and any run as --on-success or --on-failure.
 
 
   LOCKING:
@@ -361,8 +367,13 @@ OPTIONS:
 
   COMMAND EXECUTION
 
-    The command given to '--execute' is exeucted and locker exits with the same
-    status as this command.
+    If Neither '-e' nor '--execute' is passed, any arguments not already 
+    processed as switches are joined together to create a command. A '--' may 
+    be used to denote the end of locker's switches, anything following that is
+    assumed to be the command.
+
+    The given command is exeucted, and locker exits with the same status as this
+    command.
     
     Post-run commands can be executed with:
 
@@ -375,7 +386,7 @@ OPTIONS:
 
  EXAMPLES:
 
-   locker -n websitecron -e 'php5 ~/public_html/cron.php' -f ./bin/cron-failure.sh --log ./logs/website-cron.log
+   locker -n websitecron php5 ~/public_html/cron.php
 
    locker -n dbdump -e ~/bin/dbdump.sh -s ~/bin/db_success.sh -f ~/bin/db_failure.sh --no-stderr --no-stdout >/dev/null
 
