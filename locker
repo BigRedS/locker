@@ -51,6 +51,7 @@ GetOptions(
 
 	'append-stderr' => \$append_stderr,
 	'append-stdout' => \$append_stdout,
+	'append-log' => \$append_log,
 
 	'no-stderr' => \$no_stderr,
 	'no-stdout' => \$no_stdout,
@@ -117,7 +118,7 @@ info("Lockfile path: $lockfile_path");
 lock_file($lockfile_path);
 
 # Now that it's locked, make a Ctrl-C unlock the file:
-$SIG{INT} = sub{ unlock_file($lockfile_path); abort ("Ctrl-C caught"); };
+$SIG{INT} = sub{ unlock_file($lockfile_path); abort ("Ctrl-C caught", 1); };
 
 # And now we can run the command!
 my $retval = run_command($command);

@@ -43,7 +43,7 @@ For each, the command is executed and then its stdout is read and processed, and
 
 By default, everything is printed to stdout/stderr. Each line is prefixed with one of 'DEBUG', 'INFO'
 or 'ERROR' for `locker`'s own output, and with 'STDOUT' for the command's standard out and 'STDERR'
-for the command's standart error. 
+for the command's standard error. 
 
 This can be directed to a single file with `--log [path]`, or treated separately with `--stdout` and
 `--stderr`:
@@ -51,7 +51,7 @@ This can be directed to a single file with `--log [path]`, or treated separately
     locker -n web -e 'bash php ~/cron.sh' --stdout ./cron.stdout --stderr ./cron.stderr --logfile ./locker.out
 
 By default, each of those files (`./cron.stdout`, `./cron.stderr` and `./locker.out`) will be created
-anew (as if output were redirected with `>`), but the `--append-stdout`, `--append-stderr` and `--appendlog`
+anew (as if output were redirected with `>`), but the `--append-stdout`, `--append-stderr` and `--append-log`
 switches will cause them instead to be appended-to (`>>`).
 
 Stdout and stderr can each be discarded, with `--no-stdout` and `--no-stderr` respectively. The respective
@@ -70,7 +70,5 @@ The locking algorithm is relatively simple and will not work accross NFS. *Any* 
 results in `locker` writing an error message and exiting in an error state, including failure to 
 unlock. 
 
-
-
-
-
+Care is taken to ensure that the lockfile is removed however the program exits; the presence of a
+lock file should always indicate a currently-running instance, rather than an earlier failure.
