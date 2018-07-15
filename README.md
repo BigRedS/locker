@@ -57,6 +57,12 @@ switches will cause them instead to be appended-to (`>>`).
 Stdout and stderr can each be discarded, with `--no-stdout` and `--no-stderr` respectively. The respective
 handle is still opened in this instance, it's just never read-from.
 
+# Logging
+
+Locker logs very tersley to syslog; the intention is just to provide evidence that the command ran, 
+rather than to replace the need to direct output to sensible places. The ident used is 'locker/<name>'
+in the case where <name> is a simple word, and simply 'locker' when it isn't. 
+
 # Locking
 
 By default, a lockfile named `name` is created in a 'lockfile directory', which defaults to `/tmp/`

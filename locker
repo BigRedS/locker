@@ -3,6 +3,7 @@
 use strict;
 use Getopt::Long;
 use IPC::Open3;
+use Sys::Syslog;
 
 my $lockdir = '/tmp';
 my $lockfilename = undef;
@@ -107,31 +108,41 @@ if($stderr_file){
 
 # Now we can write useful errors when things go wrong, assemble a lockfile path and get a lock:
 my $lockfile_path;
+my $syslog_ident;
 if($lockfilename =~ m#^[/\.]#){
+	$syslog_ident = 'locker';
 	$lockfile_path = $lockfilename;
 }else{
+	$syslog_ident = 'locker/'.$lockfilename;
 	$lockfile_path = $lockdir.'/'.$lockfilename;
 	$lockfile_path =~ s#//#/#g;
 }
 
+openlog($syslog_ident, 'pid', 'info');
 info("Lockfile path: $lockfile_path");
 lock_file($lockfile_path);
+syslog('info', "Locked $lockfile_path");
 
 # Now that it's locked, make a Ctrl-C unlock the file:
 $SIG{INT} = sub{ unlock_file($lockfile_path); abort ("Ctrl-C caught", 1); };
 
 # And now we can run the command!
+syslog('info', "Command: $command");
 my $retval = run_command($command);
+syslog('info', "Exited: $retval");
 
 if($retval eq 0 and $on_success_cmd){
 	info("Running post-success command");
+	syslog('info', "post-success command: $on_success_cmd");
 	run_command($on_success_cmd);
 }elsif($retval != 0 and $on_failure_cmd){
 	info("Running post-failure command");
+	syslog('info', "post-failure command: $on_failure_cmd");
 	run_command($on_failure_cmd);
 }
 
 unlock_file($lockfile_path);
+syslog('info', "Finished; deleted lockfile '$lockfile_path'");
 exit $retval;
 
 # # #
@@ -315,10 +326,11 @@ OPTIONS:
   --name [name]
 
     A 'name' for this command (probably a cronjob). This is the name of the file
-    create in --lockdir (see below, default: $lockdir).
+    create in --lockdir (see below, default: $lockdir) and is used in the ident
+    for syslog logging (in the form 'locker/<name>').
 
     If this begins with a '.' or a '/' then that path is used, and --lockdir is
-    ignored.
+    ignored. In this case, it is also not used in the syslog ident.
 
   --help 
 
@@ -357,6 +369,9 @@ OPTIONS:
     These switches affect both the 'main' command (as passed to -e/--execute) 
     and any run as --on-success or --on-failure.
 
+    Important steps are logged to Syslog (creating the lockfile, running any 
+    commands, and exiting). The ident used is 'locker/<name>' where the name
+    is a simple word, and simply 'locker' where the name is a path.
 
   LOCKING:
   
