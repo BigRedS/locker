@@ -157,7 +157,7 @@ sub run_command{
 	info("Command: $command");
 
 	my $pid;
-	eval{ open3(\*WRITER, \*READER, \*ERROR, $command) };
+	eval{ $pid = open3(\*WRITER, \*READER, \*ERROR, $command) };
 	if($@){
 		abort("Command execution failed: $@");
 	}
