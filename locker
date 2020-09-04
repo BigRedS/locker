@@ -32,6 +32,8 @@ my $stderr_fh = \*STDERR;
 my $help = undef;
 my $short_help = undef;
 
+my $timestamp_prefix = undef;
+
 $short_help++ if @ARGV == 0;
 
 GetOptions(
@@ -56,6 +58,8 @@ GetOptions(
 
 	'no-stderr' => \$no_stderr,
 	'no-stdout' => \$no_stdout,
+
+  'timestamp|t' => \$timestamp_prefix,
 ) or abort ("Error parsing command-line options", 1);
 
 short_usage() if $short_help;
@@ -185,16 +189,25 @@ sub run_command{
 sub stdout{
 	my $message = shift;
 	chomp($message);
+  $message = '['.timestamp().'] '.$message if $timestamp_prefix;
 	$message='STDOUT: '.$message unless $stdout_file;
 	print $stdout_fh $message."\n";
 }
+
 sub stderr{
 	my $message = shift;
 	chomp($message);
+  $message = '['.timestamp().'] '.$message if $timestamp_prefix;
 	$message='STDERR: '.$message unless $stderr_file;
 	print $stderr_fh $message."\n";
 }
 
+sub timestamp{
+  my ($Y,$M,$D,$h,$m,$s) = (localtime(time))[5,4,3,2,1,0];
+  $Y+=1900;
+  $M++;
+  return sprintf("%s-%02d-%02d-%02d:%02d:%02d", $Y,$M,$D,$h,$m,$s);
+}
 
 # Lockfile stuff
 
@@ -266,6 +279,7 @@ sub abort{
 sub info{
 	my $message = shift;
 	chomp($message);
+  $message = '['.timestamp().'] '.$message if $timestamp_prefix;
 	$message = 'INFO:   '.$message."\n";
 	print $log_fh $message;
 	print $message if $ENV{DEBUG} > 0 and $logfile;
@@ -275,6 +289,7 @@ sub debug{
 	return unless $ENV{DEBUG} > 0;
 	my $message = shift;
 	chomp($message);
+  $message = '['.timestamp().'] '.$message if $timestamp_prefix;
 	print STDERR 'DEBUG:  '.$message."\n";
 }
 
@@ -292,6 +307,7 @@ Options:
     --log [path], --stderr [path], --stdout [path]
     --append-log, --append-stderr, --append-stdout
     --no-stderr, --no-stdout
+    --timestamp|-t
 
   Command:
     --on-success [command]
@@ -372,6 +388,11 @@ OPTIONS:
     Important steps are logged to Syslog (creating the lockfile, running any 
     commands, and exiting). The ident used is 'locker/<name>' where the name
     is a simple word, and simply 'locker' where the name is a path.
+
+    --timestamp , -t
+
+    Prefix output lines with timestamps (after the INFO/ERROR/STDOUT/STDERR
+    identifier). Timestamps are in the locale timezone.
 
   LOCKING:
   
