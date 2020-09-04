@@ -43,7 +43,7 @@ GetOptions(
 	'execute|e=s' => \$command,
 	'name|n=s' => \$lockfilename,
 
-	'lockfiledir' => \$lockdir,
+	'lockdir|lockfiledir' => \$lockdir,
 
 	'on-success=s' => \$on_success_cmd,
 	'on-failure=s' => \$on_failure_cmd,
